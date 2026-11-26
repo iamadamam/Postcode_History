@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NI Postcode History</title>
+  <meta name="description" content="Enter a Northern Ireland postcode to explore monuments, historic buildings, industrial heritage, historic gardens, 19th-century maps and Wikipedia articles nearby.">
+  <meta name="theme-color" content="#1f2933">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23b45309'/%3E%3Ccircle cx='16' cy='16' r='6' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>NI Postcode History</h1>
+    <p class="tagline">Monuments, historic buildings and old maps near any Northern Ireland postcode.</p>
+    <form id="search" class="search" novalidate>
+      <label for="postcode" class="visually-hidden">Postcode</label>
+      <input id="postcode" name="postcode" type="text" placeholder="e.g. BT7 1NN"
+             autocomplete="postal-code" autocapitalize="characters" spellcheck="false"
+             enterkeyhint="search" maxlength="10" aria-describedby="search-message">
+      <button type="submit">Explore</button>
+    </form>
+    <p id="search-message" class="search-message" role="status" aria-live="polite"></p>
+  </header>
+
+  <main class="layout">
+    <section class="map-panel" aria-label="Map">
+      <div id="map" class="map"></div>
+      <div class="historical" id="historical">
+        <label for="edition">Historical map</label>
+        <select id="edition">
+          <option value="">None</option>
+        </select>
+        <label for="opacity" class="opacity">
+          <span>Opacity</span>
+          <input id="opacity" type="range" min="0" max="100" value="70" disabled>
+          <output id="opacity-value" for="opacity">70%</output>
+        </label>
+        <p id="historical-message" class="historical-message" role="status" aria-live="polite" hidden></p>
+      </div>
+    </section>
+
+    <div class="results" id="results">
+      <section class="intro" id="intro">
+        <h2>What's near you?</h2>
+        <p>Enter a postcode to see everything recorded by the Department for Communities within 1 km:
+          archaeological monuments, historic buildings, industrial heritage and historic parks and gardens.
+          Switch on a historical map to see the area as it was surveyed between 1829 and 1963.</p>
+        <p>You can also enter just the first part of a postcode, such as <a href="?postcode=BT48">BT48</a>,
+          or try <a href="?postcode=BT7%201NN">BT7 1NN</a> (Queen's University, Belfast).</p>
+      </section>
+
+      <section class="heritage" id="heritage" hidden aria-labelledby="heritage-heading">
+        <h2 id="heritage-heading">Heritage records <span class="count" id="heritage-count"></span></h2>
+        <div class="filters" id="filters" role="group" aria-label="Show record types"></div>
+        <p class="empty" id="heritage-empty" hidden></p>
+        <ol class="record-list" id="record-list"></ol>
+        <button type="button" class="more" id="show-more" hidden>Show more</button>
+      </section>
+
+      <section class="articles" id="articles" hidden aria-labelledby="articles-heading">
+        <h2 id="articles-heading">Nearby articles <span class="count" id="articles-count"></span></h2>
+        <p class="empty" id="articles-empty" hidden></p>
+        <ol class="article-list" id="article-list"></ol>
+      </section>
+
+      <footer class="site-footer">
+        <p>Heritage records: Department for Communities, Historic Environment Division
+          (<a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/">Open Government Licence</a>),
+          data from <span id="data-date">the latest download</span>.
+          Historical maps: © Crown copyright, OSNI.
+          Postcodes: <a href="https://postcodes.io/">postcodes.io</a> (Northern Ireland postcode data is for non-commercial use only).
+          Articles: <a href="https://en.wikipedia.org/">Wikipedia</a> (CC BY-SA).
+          Map data: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors (ODbL).</p>
+        <p>Locations can be approximate. For questions about a specific record, contact the
+          <a href="https://www.communities-ni.gov.uk/topics/historic-environment">Historic Environment Division</a>.</p>
+      </footer>
+    </div>
+  </main>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

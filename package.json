@@ -1,0 +1,11 @@
+{
+  "name": "ni-postcode-history",
+  "private": true,
+  "description": "Static site: enter a Northern Ireland postcode and see the history of the area.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000 --directory site",
+    "test": "node --test tests/*.test.mjs",
+    "fetch-data": "python3 scripts/fetch_data.py"
+  }
+}
