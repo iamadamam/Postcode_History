@@ -77,3 +77,10 @@ export async function recordsNear(centre, radius, fetchImpl = fetch, base = 'dat
     radius
   );
 }
+
+/** How many records there are of each Record Type: { monument: 2, building: 1, ... }. */
+export function countByType(records) {
+  const counts = {};
+  for (const record of records) counts[record.properties.type] = (counts[record.properties.type] ?? 0) + 1;
+  return counts;
+}

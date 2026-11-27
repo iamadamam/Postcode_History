@@ -37,15 +37,20 @@ export function htmlToText(html) {
 }
 
 /**
- * Split the Place-Name Project's "historic name" text into the Irish form and its meaning.
- * 'Ir. Baile na Faiche ‘townland of the lawn or green’' -> { irish: 'Baile na Faiche', meaning: 'townland of the lawn or green' }
+ * Split the Place-Name Project's "historic name" text into the Irish form, its meaning, and
+ * (for names that aren't Irish) a short note on where the name comes from.
+ * 'Ir. Baile na Faiche ‘townland of the lawn or green’' -> { irish: 'Baile na Faiche', meaning: 'townland of the lawn or green', origin: '' }
+ * 'Eng. corporation' -> { irish: '', meaning: '', origin: 'From the English “corporation”' }
  */
 export function splitMeaning(text) {
   const clean = text.replace(/\s+/g, ' ').trim();
-  const match = /^(?:(?:Ir|Ire|Irish|Eng|Sc)\.?\s+)?(.*?)\s*[‘'"“](.+?)[’'"”]\.?$/.exec(clean);
-  if (match) return { irish: match[1].trim().replace(/[,;:]$/, ''), meaning: match[2].trim() };
+  const english = /^Eng(?:lish)?\.?\s+(?!.*[‘'"“])(.+)$/.exec(clean);
+  if (english) return { irish: '', meaning: '', origin: `From the English “${english[1].trim()}”` };
+  if (/\benglish name\b/i.test(clean)) return { irish: '', meaning: '', origin: clean };
+  const quoted = /^(?:(?:Ir|Ire|Irish|Eng|Sc)\.?\s+)?(.*?)\s*[‘'"“](.+?)[’'"”]\.?$/.exec(clean);
+  if (quoted) return { irish: quoted[1].trim().replace(/[,;:]$/, ''), meaning: quoted[2].trim(), origin: '' };
   // No quoted meaning: usually just the Irish form of a street name ('An Ollscoil').
-  return { irish: clean, meaning: '' };
+  return { irish: clean, meaning: '', origin: '' };
 }
 
 async function query(layer, params, fetchImpl) {
@@ -64,12 +69,13 @@ const pointParams = (centre) => ({
 });
 
 function toPlaceName(attributes, centre, geometry) {
-  const meaning = splitMeaning(htmlToText(attributes.HISTORIC_NAME));
+  const { irish, meaning, origin } = splitMeaning(htmlToText(attributes.HISTORIC_NAME));
   const place = {
     id: attributes.PNAME_ID,
     name: attributes.PLACE_NAME ?? attributes.NAME ?? '',
-    irish: meaning.irish,
-    meaning: meaning.meaning,
+    irish,
+    meaning,
+    origin,
     history: htmlToText(attributes.PARAGRAPH),
     note: htmlToText(attributes.MORE_DETAILS),
     townland: attributes.TOWNLAND ?? '',

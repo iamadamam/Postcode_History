@@ -1,6 +1,7 @@
 import { parsePostcode, locatePostcode, PostcodeError } from './postcode.js';
-import { recordsNear, loadManifest, RECORD_TYPES, recordUrl } from './records.js';
-import { nearbyArticles, articleSummary } from './wikipedia.js';
+import { recordsNear, loadManifest, RECORD_TYPES, recordUrl, countByType } from './records.js';
+import { nearbyArticles, articleSummary, articleUrl, titleFromUrl } from './wikipedia.js';
+import { escapeHtml } from './format.js';
 import { timelineEvents, nearestPlace } from './wikidata.js';
 import { heritageRows, buildTimeline } from './timeline.js';
 import { townlandAt, placeNamesNear, PLACENAMES_CREDIT } from './placenames.js';
@@ -13,9 +14,6 @@ const RECORDS_PAGE = 25;
 const ARTICLES_PAGE = 10;
 
 const $ = (id) => document.getElementById(id);
-const escapeHtml = (text) =>
-  String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const plural = (n, one, many) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`;
 const skeleton = '<div class="skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
 const wideLayout = window.matchMedia('(min-width: 960px)');
 
@@ -112,7 +110,20 @@ const heritage = {
   onlyIds: null,
   onlyLabel: '',
   selectedId: null,
+  failed: false,
 };
+
+/**
+ * Change which Heritage Records are shown: only some records (from a Timeline row),
+ * only one Record Type (from a quick fact), or everything.
+ */
+function setHeritageFilter({ onlyIds = null, label = '', onlyType = null } = {}) {
+  heritage.onlyIds = onlyIds;
+  heritage.onlyLabel = label;
+  heritage.hiddenTypes = new Set(onlyType ? Object.keys(RECORD_TYPES).filter((t) => t !== onlyType) : []);
+  heritage.shown = RECORDS_PAGE;
+  refreshHeritage();
+}
 
 function factsText(record) {
   return record.properties.facts.join(' · ');
@@ -140,8 +151,7 @@ function visibleRecords() {
 }
 
 function renderFilters() {
-  const counts = {};
-  for (const r of heritage.records) counts[r.properties.type] = (counts[r.properties.type] ?? 0) + 1;
+  const counts = countByType(heritage.records);
   $('filters').innerHTML = Object.entries(RECORD_TYPES)
     .map(([type, info]) => {
       const count = counts[type] ?? 0;
@@ -156,7 +166,8 @@ function renderRecordList() {
   const records = visibleRecords();
   const empty = $('heritage-empty');
   empty.hidden = records.length > 0;
-  if (!heritage.records.length) empty.textContent = 'No heritage records within 1 km.';
+  if (heritage.failed) empty.textContent = "We couldn't load the heritage records. Please try again.";
+  else if (!heritage.records.length) empty.textContent = 'No heritage records within 1 km.';
   else if (!records.length) empty.textContent = 'Nothing matches. Use the buttons above to show more record types.';
 
   $('record-list').innerHTML = records
@@ -234,12 +245,7 @@ $('show-more').addEventListener('click', () => {
   heritage.shown += RECORDS_PAGE;
   renderRecordList();
 });
-$('filter-clear').addEventListener('click', () => {
-  heritage.onlyIds = null;
-  heritage.onlyLabel = '';
-  heritage.shown = RECORDS_PAGE;
-  refreshHeritage();
-});
+$('filter-clear').addEventListener('click', () => setHeritageFilter());
 
 function showRecords(records) {
   heritage.records = records;
@@ -302,7 +308,7 @@ async function openArticle(title, { lngLat = null } = {}) {
   $('dialog-description').textContent = '';
   $('dialog-extract').innerHTML = skeleton;
   $('dialog-image').hidden = true;
-  $('dialog-link').href = `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+  $('dialog-link').href = articleUrl(title);
   $('dialog-map').hidden = !dialogTarget;
   if (!dialog.open) dialog.showModal();
   try {
@@ -317,6 +323,7 @@ async function openArticle(title, { lngLat = null } = {}) {
       $('dialog-image').hidden = false;
     }
   } catch {
+    if ($('dialog-title').textContent !== title) return; // another article was opened meanwhile
     $('dialog-extract').textContent = known?.extract || "We couldn't load a summary. You can still read the full article on Wikipedia.";
   }
 }
@@ -333,7 +340,7 @@ dialog.addEventListener('click', (event) => {
 
 // ------------------------------------------------------------------ timeline
 
-const timeline = { events: null, heritage: null, radius: SEARCH_RADIUS, rows: [], place: null, failed: false };
+const timeline = { events: null, heritage: null, radius: SEARCH_RADIUS, rows: [], newspaperTown: null, failed: false };
 
 function renderTimeline() {
   if (timeline.events === null && !timeline.failed) {
@@ -379,10 +386,10 @@ function renderTimeline() {
     .join('');
 
   const newspapers = $('newspapers');
-  if (timeline.place) {
+  if (timeline.newspaperTown) {
     newspapers.hidden = false;
-    newspapers.href = `https://www.britishnewspaperarchive.co.uk/search/results?basicsearch=${encodeURIComponent(timeline.place)}`;
-    newspapers.innerHTML = `<strong>Search old newspapers for ${escapeHtml(timeline.place)} ↗</strong>
+    newspapers.href = `https://www.britishnewspaperarchive.co.uk/search/results?basicsearch=${encodeURIComponent(timeline.newspaperTown)}`;
+    newspapers.innerHTML = `<strong>Search old newspapers for ${escapeHtml(timeline.newspaperTown)} ↗</strong>
       <span>British Newspaper Archive: free to search, subscription to read.</span>`;
   } else {
     newspapers.hidden = true;
@@ -396,35 +403,29 @@ $('timeline').addEventListener('click', (event) => {
   const row = timeline.rows[Number(entry.dataset.index)];
   if (!row) return;
   if (row.kind === 'heritage') {
-    heritage.onlyIds = row.ids;
-    heritage.onlyLabel = `Showing ${row.title} from ${row.when}.`;
-    heritage.hiddenTypes.clear();
-    heritage.shown = RECORDS_PAGE;
-    refreshHeritage();
+    setHeritageFilter({ onlyIds: row.ids, label: `Showing ${row.title} from ${row.when}.` });
     goToTab('heritage');
     return;
   }
   const lngLat = row.lat !== null ? [row.lon, row.lat] : null;
   if (lngLat) map.focus(lngLat, { forPopup: !row.article });
   if (row.article) {
-    const title = decodeURIComponent(row.article.split('/wiki/')[1] ?? '').replace(/_/g, ' ');
-    openArticle(title, { lngLat });
+    openArticle(titleFromUrl(row.article), { lngLat });
   } else if (lngLat) {
     map.openPopup(lngLat, `<div class="popup"><h3>${escapeHtml(row.title)}</h3><div class="meta">${escapeHtml(row.when)}</div></div>`);
     if (!wideLayout.matches) $('map').scrollIntoView({ block: 'start', behavior: 'smooth' });
   }
 });
 
-// ------------------------------------------------------------------ overview
+// ------------------------------------------------------------------ area summary (the Overview tab)
 
-const overview = { place: null, records: null, articles: null };
+const areaSummary = { recordsLoaded: false };
 
 function renderFacts() {
   const facts = [];
   const records = heritage.records;
-  if (overview.records !== null) {
-    const counts = {};
-    for (const r of records) counts[r.properties.type] = (counts[r.properties.type] ?? 0) + 1;
+  if (areaSummary.recordsLoaded && !heritage.failed) {
+    const counts = countByType(records);
     facts.push({ value: records.length, label: 'heritage records within 1 km', tab: 'heritage' });
     const oldest = timeline.rows[0];
     if (oldest) facts.push({ value: oldest.when, label: 'the oldest thing on the timeline', tab: 'timeline', small: true });
@@ -447,12 +448,7 @@ function renderFacts() {
     const button = event.target.closest('.fact');
     if (!button) return;
     const fact = facts[Number(button.dataset.index)];
-    if (fact.type) {
-      heritage.onlyIds = null;
-      heritage.hiddenTypes = new Set(Object.keys(RECORD_TYPES).filter((t) => t !== fact.type));
-      heritage.shown = RECORDS_PAGE;
-      refreshHeritage();
-    }
+    if (fact.type) setHeritageFilter({ onlyType: fact.type });
     goToTab(fact.tab);
   };
 }
@@ -462,13 +458,14 @@ async function renderTownCard(centre, token) {
   card.hidden = false;
   card.innerHTML = `<div class="card-body">${skeleton}</div>`;
   try {
-    const place = await nearestPlace(centre);
+    const found = await nearestPlace(centre);
     if (token !== searchToken) return;
-    if (!place) {
+    if (!found) {
       card.hidden = true;
       return;
     }
-    timeline.place = place.town;
+    const { place, town } = found;
+    timeline.newspaperTown = (town ?? place).name;
     renderTimeline();
     let summary = null;
     try {
@@ -484,7 +481,7 @@ async function renderTownCard(centre, token) {
         <h2>${escapeHtml(summary?.title || place.title)}</h2>
         ${summary?.description ? `<p class="meta">${escapeHtml(summary.description)}</p>` : ''}
         <p class="extract">${escapeHtml(summary?.extract || '')}</p>
-        <a class="card-link" href="${escapeHtml(summary?.url || `https://en.wikipedia.org/wiki/${encodeURIComponent(place.title.replace(/ /g, '_'))}`)}" target="_blank" rel="noopener">Read more on Wikipedia ↗</a>
+        <a class="card-link" href="${escapeHtml(summary?.url || articleUrl(place.title))}" target="_blank" rel="noopener">Read more on Wikipedia ↗</a>
       </div>`;
   } catch {
     if (token === searchToken) card.hidden = true;
@@ -498,9 +495,11 @@ async function renderPlaceNames(centre, token) {
   card.innerHTML = skeleton;
   namesCard.hidden = true;
   const credit = `From the <a href="${PLACENAMES_CREDIT.url}" target="_blank" rel="noopener">${escapeHtml(PLACENAMES_CREDIT.text)}</a>.`;
+  let townlandId = null;
   try {
     const townland = await townlandAt(centre);
     if (token !== searchToken) return;
+    townlandId = townland?.id ?? null;
     if (!townland) {
       card.hidden = true;
     } else {
@@ -508,12 +507,20 @@ async function renderPlaceNames(centre, token) {
       card.innerHTML = `<p class="card-eyebrow">Your townland</p>
         <h2>${escapeHtml(townland.name)}</h2>
         ${townland.irish ? `<p class="irish">${escapeHtml(townland.irish)}</p>` : ''}
-        ${townland.meaning ? `<p class="meaning">“${escapeHtml(townland.meaning)}”</p>` : '<p class="meta">No meaning has been recorded for this name yet.</p>'}
+        ${townland.meaning ? `<p class="meaning">“${escapeHtml(townland.meaning)}”</p>` : ''}
+        ${townland.origin ? `<p class="meaning">${escapeHtml(townland.origin)}</p>` : ''}
+        ${!townland.meaning && !townland.origin ? '<p class="meta">No meaning has been recorded for this name yet.</p>' : ''}
         ${where ? `<p class="meta">${escapeHtml(where)}</p>` : ''}
         ${townland.history ? `<details><summary>The story of the name</summary><p>${escapeHtml(townland.history)}</p></details>` : ''}
         <p class="credit">${credit}</p>`;
     }
-    const names = await placeNamesNear(centre, SEARCH_RADIUS, { exclude: townland?.id });
+  } catch {
+    if (token !== searchToken) return;
+    card.innerHTML = `<p class="card-eyebrow">Your townland</p><p class="empty">We couldn't load place names just now.</p>`;
+    return;
+  }
+  try {
+    const names = await placeNamesNear(centre, SEARCH_RADIUS, { exclude: townlandId }, fetch);
     if (token !== searchToken) return;
     if (names.length) {
       namesCard.hidden = false;
@@ -529,8 +536,7 @@ async function renderPlaceNames(centre, token) {
       $('names-credit').innerHTML = credit;
     }
   } catch {
-    if (token !== searchToken) return;
-    card.innerHTML = `<p class="card-eyebrow">Your townland</p><p class="empty">We couldn't load place names just now.</p>`;
+    // Nearby names are extra: leave the townland card as it is and show nothing more.
   }
 }
 
@@ -554,8 +560,9 @@ function resetResults() {
   articles.list = [];
   articles.byTitle = new Map();
   articles.shown = ARTICLES_PAGE;
-  Object.assign(timeline, { events: null, heritage: null, radius: SEARCH_RADIUS, rows: [], place: null, failed: false });
-  Object.assign(overview, { place: null, records: null, articles: null });
+  Object.assign(timeline, { events: null, heritage: null, radius: SEARCH_RADIUS, rows: [], newspaperTown: null, failed: false });
+  Object.assign(areaSummary, { recordsLoaded: false });
+  heritage.failed = false;
   for (const id of ['count-timeline', 'count-heritage', 'count-articles']) $(id).textContent = '';
   $('facts').innerHTML = skeleton;
   $('record-list').innerHTML = `<li>${skeleton}</li>`;
@@ -580,17 +587,14 @@ async function search(input, { updateUrl = true } = {}) {
   try {
     parsed = parsePostcode(input);
   } catch (error) {
+    // This search replaces any lookup still running, so make sure the button works again.
+    document.querySelector('#search button').disabled = false;
     setMessage(escapeHtml(error.message), { error: true });
     $('postcode').focus();
     return;
   }
 
   $('postcode').value = parsed.display;
-  if (updateUrl) {
-    const url = new URL(window.location.href);
-    url.searchParams.set('postcode', parsed.compact);
-    if (url.href !== window.location.href) history.pushState({ postcode: parsed.compact }, '', url);
-  }
   setMessage(`Looking up <strong>${escapeHtml(parsed.display)}</strong>…`);
   const button = document.querySelector('#search button');
   button.disabled = true;
@@ -607,6 +611,12 @@ async function search(input, { updateUrl = true } = {}) {
   if (token !== searchToken) return;
   button.disabled = false;
   setMessage('');
+  // Only now that the postcode was found does the address bar change, so it always matches the results.
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('postcode', parsed.compact);
+    if (url.href !== window.location.href) history.pushState({ postcode: parsed.compact }, '', url);
+  }
 
   const centre = { lat: place.lat, lon: place.lon };
   document.title = `${place.label} · NI Postcode History`;
@@ -620,25 +630,28 @@ async function search(input, { updateUrl = true } = {}) {
   map.showSearchArea(centre, SEARCH_RADIUS);
   if (!wideLayout.matches) $('panel').focus({ preventScroll: true });
 
-  recordsNear(centre, SEARCH_RADIUS)
+  // Heritage records come from local tiles (fast); the Timeline waits for them so it knows how
+  // many heritage rows it already has before deciding whether to widen its search to 5 km.
+  const heritageLoaded = recordsNear(centre, SEARCH_RADIUS)
     .then((records) => {
       if (token !== searchToken) return;
-      overview.records = records;
+      areaSummary.recordsLoaded = true;
       showRecords(records);
       timeline.heritage = heritageRows(records);
       renderTimeline();
     })
     .catch(() => {
       if (token !== searchToken) return;
-      overview.records = [];
+      areaSummary.recordsLoaded = true;
+      heritage.failed = true;
       $('record-list').innerHTML = '';
-      $('heritage-empty').hidden = false;
-      $('heritage-empty').textContent = "We couldn't load the heritage records. Please try again.";
+      renderRecordList();
       timeline.heritage = [];
       renderTimeline();
     });
 
-  timelineEvents(centre)
+  heritageLoaded
+    .then(() => timelineEvents(centre, fetch, { alreadyShown: timeline.heritage?.length ?? 0 }))
     .then(({ rows, radius }) => {
       if (token !== searchToken) return;
       timeline.events = rows;
@@ -707,18 +720,18 @@ if (FEATURES.historicalMaps) {
     const edition = EDITIONS.find((e) => e.id === select.value);
     opacity.disabled = !edition;
     message.hidden = true;
-    map.setHistorical(null);
+    map.setHistoricalMap(null);
     if (!edition) return;
     if (!(await isAvailable(edition.url))) {
       message.hidden = false;
       message.innerHTML = `The historical maps aren't available on this website right now. See them in the <a href="${PRONI_VIEWER}" target="_blank" rel="noopener">PRONI Historical Maps viewer</a>.`;
       return;
     }
-    map.setHistorical({ tiles: exportTiles(edition.url), opacity: opacity.value / 100 });
+    map.setHistoricalMap({ tiles: exportTiles(edition.url), opacity: opacity.value / 100 });
   });
   opacity.addEventListener('input', () => {
     $('opacity-value').value = `${opacity.value}%`;
     const edition = EDITIONS.find((e) => e.id === select.value);
-    if (edition) map.setHistorical({ tiles: exportTiles(edition.url), opacity: opacity.value / 100 });
+    if (edition) map.setHistoricalMap({ tiles: exportTiles(edition.url), opacity: opacity.value / 100 });
   });
 }

@@ -1,6 +1,8 @@
 // The Timeline ("Through the years"): dated Wikidata items near the Search
 // Centre, plus Heritage Records grouped by era or build date. Pure functions.
 
+import { plural } from './format.js';
+
 // Rough start years so eras sort sensibly among dated events.
 const ERA_START = {
   Prehistoric: -10000,
@@ -40,8 +42,6 @@ export function eraStart(label) {
   if (century) return (Number(century[1]) - 1) * 100;
   return null;
 }
-
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Group Heritage Records into Timeline rows:

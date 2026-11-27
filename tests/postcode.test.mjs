@@ -18,7 +18,7 @@ test('rejects empty, non-NI and malformed input with friendly messages', () => {
   assert.throws(() => parsePostcode(''), (e) => e instanceof PostcodeError && /Enter a Northern Ireland postcode/.test(e.message));
   assert.throws(() => parsePostcode('SW1A 1AA'), /outside Northern Ireland/);
   assert.throws(() => parsePostcode('M1'), /outside Northern Ireland/);
-  assert.throws(() => parsePostcode('BT7 1N'), /doesn't look like a postcode/);
+  assert.throws(() => parsePostcode('BT7 1N'), /looks incomplete/);
   assert.throws(() => parsePostcode('hello'), /doesn't look like a postcode/);
 });
 
@@ -72,4 +72,33 @@ test('reports unknown postcodes and network failures kindly', async () => {
     locatePostcode(parsePostcode('BT7 1NN'), fakeFetch({ '/postcodes/BT71NN': { status: 500, body: {} } })),
     /having problems/
   );
+});
+
+test('a half-typed full postcode is an error, not a different district', () => {
+  for (const input of ['BT7 1', 'BT1 1', 'bt48 7n']) {
+    assert.throws(() => parsePostcode(input), /incomplete/, input);
+  }
+  // Without a space, short codes are still districts.
+  assert.equal(parsePostcode('BT71').kind, 'district');
+  assert.equal(parsePostcode(' BT7 ').kind, 'district');
+});
+
+test('a terminated postcode takes its ward and council from the nearest live postcode', async () => {
+  const fetchImpl = fakeFetch({
+    '/terminated_postcodes/BT11AA': { status: 200, body: { result: { postcode: 'BT1 1AA', latitude: 54.6, longitude: -5.9, year_terminated: 2005 } } },
+    '/postcodes': { status: 200, body: { result: [{ postcode: 'BT1 1AB', admin_ward: 'Botanic', admin_district: 'Belfast' }] } },
+  });
+  const place = await locatePostcode(parsePostcode('BT1 1AA'), fetchImpl);
+  assert.equal(place.place, 'Botanic, Belfast');
+  assert.ok(fetchImpl.calls.some((url) => url.includes('/postcodes?lon=-5.9&lat=54.6')));
+});
+
+test('a terminated postcode still works if the nearby lookup fails', async () => {
+  const fetchImpl = fakeFetch({
+    '/terminated_postcodes/BT11AA': { status: 200, body: { result: { postcode: 'BT1 1AA', latitude: 54.6, longitude: -5.9 } } },
+    '/postcodes': new TypeError('offline'),
+  });
+  const place = await locatePostcode(parsePostcode('BT1 1AA'), fetchImpl);
+  assert.equal(place.place, '');
+  assert.equal(place.lat, 54.6);
 });

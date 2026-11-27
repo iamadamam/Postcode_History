@@ -25,6 +25,11 @@ export function parsePostcode(input) {
     const display = `${compact.slice(0, -3)} ${compact.slice(-3)}`;
     return { kind: 'postcode', compact, display };
   }
+  // "BT7 1" has a space and something after it: it's a full postcode still being typed, not district BT71.
+  const [outward, inward] = String(input).trim().toUpperCase().split(/\s+/);
+  if (inward && DISTRICT_BT.test(outward)) {
+    throw new PostcodeError(`${outward} ${inward} looks incomplete. A full postcode ends with a number and two letters, like BT7 1NN.`);
+  }
   if (DISTRICT_BT.test(compact)) {
     return { kind: 'district', compact, display: compact };
   }
@@ -97,11 +102,22 @@ export async function locatePostcode(parsed, fetchImpl = fetch) {
   const terminated = await getJson(fetchImpl, `${POSTCODES_API}/terminated_postcodes/${code}`);
   if (hasLocation(terminated)) {
     const year = terminated.year_terminated ? ` in ${terminated.year_terminated}` : '';
+    // Terminated postcodes carry no ward or council, so borrow them from the nearest live postcode.
+    let place = '';
+    try {
+      const nearest = await getJson(
+        fetchImpl,
+        `${POSTCODES_API}/postcodes?lon=${terminated.longitude}&lat=${terminated.latitude}&limit=1`
+      );
+      if (nearest?.[0]) place = [nearest[0].admin_ward, nearest[0].admin_district].filter(Boolean).join(', ');
+    } catch {
+      // The place line is a nicety; the location is what matters.
+    }
     return {
       lat: terminated.latitude,
       lon: terminated.longitude,
       label: terminated.postcode ?? parsed.display,
-      place: '',
+      place,
       note: `${parsed.display} stopped being used${year}. Showing where it used to be.`,
     };
   }

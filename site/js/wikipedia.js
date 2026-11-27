@@ -14,6 +14,7 @@ export function nearbyArticlesUrl(centre, radius, limit) {
     ggslimit: String(limit),
     prop: 'coordinates|pageimages|extracts|info',
     codistancefrompoint: `${centre.lat}|${centre.lon}`,
+    colimit: String(limit),
     piprop: 'thumbnail',
     pithumbsize: '160',
     pilimit: String(limit),
@@ -26,6 +27,21 @@ export function nearbyArticlesUrl(centre, radius, limit) {
   return `${WIKIPEDIA_API}?${params}`;
 }
 
+/** The English Wikipedia page for an article title. */
+export const articleUrl = (title) => `https://en.wikipedia.org/wiki/${encodeURIComponent(String(title).replace(/ /g, '_'))}`;
+
+/** The article title from a Wikipedia page URL ('…/wiki/Queen%27s_Quarter,_Belfast' -> "Queen's Quarter, Belfast"). */
+export const titleFromUrl = (url) => decodeURIComponent(String(url).split('/wiki/')[1] ?? '').replace(/_/g, ' ');
+
+/** Keep a URL from an outside source only if it is https (never javascript:, data: and so on). */
+export function httpsOnly(url) {
+  try {
+    return new URL(url).protocol === 'https:' ? url : '';
+  } catch {
+    return '';
+  }
+}
+
 /** Turn an API response into [{ title, url, extract, thumbnail, lat, lon, distance }], nearest first. */
 export function parseNearbyArticles(body) {
   const pages = body?.query?.pages ?? [];
@@ -35,9 +51,9 @@ export function parseNearbyArticles(body) {
       const [coord] = page.coordinates;
       return {
         title: page.title,
-        url: page.fullurl ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/ /g, '_'))}`,
+        url: httpsOnly(page.fullurl) || articleUrl(page.title),
         extract: page.extract ?? '',
-        thumbnail: page.thumbnail?.source ?? '',
+        thumbnail: httpsOnly(page.thumbnail?.source),
         lat: coord.lat,
         lon: coord.lon,
         distance: coord.dist ?? 0,
@@ -64,9 +80,9 @@ export function parseSummary(body) {
     title: body.titles?.normalized ?? body.title ?? '',
     description: body.description ?? '',
     extract: body.extract ?? '',
-    image: body.originalimage?.source ?? body.thumbnail?.source ?? '',
-    thumbnail: body.thumbnail?.source ?? '',
-    url: body.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent((body.title ?? '').replace(/ /g, '_'))}`,
+    image: httpsOnly(body.originalimage?.source) || httpsOnly(body.thumbnail?.source),
+    thumbnail: httpsOnly(body.thumbnail?.source),
+    url: httpsOnly(body.content_urls?.desktop?.page) || articleUrl(body.title ?? ''),
   };
 }
 

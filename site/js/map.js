@@ -12,6 +12,12 @@ const STYLES = {
 const NI_CENTRE = [-6.75, 54.62];
 const EMPTY = { type: 'FeatureCollection', features: [] };
 
+// Colours that change with the theme.
+const THEME_COLOURS = {
+  light: { stroke: '#ffffff', areaFill: '#1f2933', areaLine: '#1f2933', articleFill: '#ffffff', articleStroke: '#111827' },
+  dark: { stroke: '#0f1419', areaFill: '#ffffff', areaLine: '#cbd2d9', articleFill: '#0f1419', articleStroke: '#f5f7fa' },
+};
+
 const typeColour = ['match', ['get', 'type'], ...Object.entries(RECORD_TYPES).flatMap(([type, info]) => [type, info.colour]), '#666'];
 
 /** A polygon approximating a circle of `radius` metres. */
@@ -75,28 +81,33 @@ export function createMap(container, { theme = 'light', onRecordClick, onArticle
   const popup = new maplibregl.Popup({ maxWidth: '300px', closeButton: true, focusAfterOpen: false });
   let marker = null;
 
-  function strokeColour() {
-    return state.theme === 'dark' ? '#0f1419' : '#ffffff';
+  const colours = () => THEME_COLOURS[state.theme];
+
+  /** Add the Historical Map raster layer ({ tiles, opacity }) beneath everything of ours. */
+  function addHistoricalMap(historicalMap) {
+    map.addSource('historical', {
+      type: 'raster',
+      tiles: [historicalMap.tiles],
+      tileSize: 256,
+      attribution: 'Historical map © Crown copyright, OSNI (OGL)',
+    });
+    map.addLayer(
+      { id: 'historical', type: 'raster', source: 'historical', paint: { 'raster-opacity': historicalMap.opacity } },
+      map.getLayer('area-fill') ? 'area-fill' : undefined
+    );
   }
 
-  function addOverlays() {
-    if (state.historical) {
-      map.addSource('historical', {
-        type: 'raster',
-        tiles: [state.historical.tiles],
-        tileSize: 256,
-        attribution: 'Historical map © Crown copyright, OSNI (OGL)',
-      });
-      map.addLayer({ id: 'historical', type: 'raster', source: 'historical', paint: { 'raster-opacity': state.historical.opacity } });
-    }
+  /** Our own sources and layers, added on top of whichever base style is loaded. */
+  function addOwnLayers() {
+    if (state.historical) addHistoricalMap(state.historical);
 
     map.addSource('area', { type: 'geojson', data: state.area ?? EMPTY });
-    map.addLayer({ id: 'area-fill', type: 'fill', source: 'area', paint: { 'fill-color': state.theme === 'dark' ? '#ffffff' : '#1f2933', 'fill-opacity': 0.04 } });
+    map.addLayer({ id: 'area-fill', type: 'fill', source: 'area', paint: { 'fill-color': colours().areaFill, 'fill-opacity': 0.04 } });
     map.addLayer({
       id: 'area-line',
       type: 'line',
       source: 'area',
-      paint: { 'line-color': state.theme === 'dark' ? '#cbd2d9' : '#1f2933', 'line-width': 1.5, 'line-dasharray': [3, 3] },
+      paint: { 'line-color': colours().areaLine, 'line-width': 1.5, 'line-dasharray': [3, 3] },
     });
 
     map.addSource('records', { type: 'geojson', data: state.records });
@@ -111,7 +122,7 @@ export function createMap(container, { theme = 'light', onRecordClick, onArticle
       paint: {
         'circle-color': typeColour,
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 3.5, 15, 5.5, 18, 8],
-        'circle-stroke-color': strokeColour(),
+        'circle-stroke-color': colours().stroke,
         'circle-stroke-width': 1,
       },
     });
@@ -129,9 +140,9 @@ export function createMap(container, { theme = 'light', onRecordClick, onArticle
       type: 'circle',
       source: 'articles',
       paint: {
-        'circle-color': state.theme === 'dark' ? '#0f1419' : '#ffffff',
+        'circle-color': colours().articleFill,
         'circle-radius': 6,
-        'circle-stroke-color': state.theme === 'dark' ? '#f5f7fa' : '#111827',
+        'circle-stroke-color': colours().articleStroke,
         'circle-stroke-width': 2.5,
       },
     });
@@ -141,8 +152,8 @@ export function createMap(container, { theme = 'light', onRecordClick, onArticle
 
   const ready = new Promise((resolve) => map.once('load', resolve));
   // MapLibre opens compact attribution on load; start it collapsed so it doesn't cover the map on phones.
-  ready.then(() => container && document.querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show'));
-  map.on('style.load', addOverlays);
+  ready.then(() => document.querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show'));
+  map.on('style.load', addOwnLayers);
 
   function applyFilter() {
     if (!map.getLayer('records-points')) return;
@@ -242,15 +253,12 @@ export function createMap(container, { theme = 'light', onRecordClick, onArticle
 
     centreOf,
 
-    /** Show a raster overlay ({ tiles, opacity }) or remove it (null). */
-    setHistorical(overlay) {
-      state.historical = overlay;
+    /** Show a Historical Map ({ tiles, opacity }) or remove it (null). */
+    setHistoricalMap(historicalMap) {
+      state.historical = historicalMap;
       if (map.getLayer('historical')) map.removeLayer('historical');
       if (map.getSource('historical')) map.removeSource('historical');
-      if (overlay) {
-        map.addSource('historical', { type: 'raster', tiles: [overlay.tiles], tileSize: 256 });
-        map.addLayer({ id: 'historical', type: 'raster', source: 'historical', paint: { 'raster-opacity': overlay.opacity } }, 'area-fill');
-      }
+      if (historicalMap) addHistoricalMap(historicalMap);
     },
 
     resize() {

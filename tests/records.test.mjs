@@ -83,3 +83,34 @@ test('parseNearbyArticles sorts by distance and skips pages without coordinates'
   assert.equal(articles[0].url, 'https://en.wikipedia.org/wiki/Near_Place');
   assert.equal(articles[0].thumbnail, 'https://x/y.jpg');
 });
+
+test('nearbyArticlesUrl asks for coordinates for every requested article', async () => {
+  const { nearbyArticlesUrl } = await import('../site/js/wikipedia.js');
+  const params = new URL(nearbyArticlesUrl({ lat: 54.58, lon: -5.93 }, 1000, 30)).searchParams;
+  assert.equal(params.get('ggslimit'), '30');
+  assert.equal(params.get('colimit'), '30'); // MediaWiki returns coordinates for only 10 pages by default
+});
+
+test('Wikipedia links and images are only ever https URLs', async () => {
+  const { parseSummary, parseNearbyArticles } = await import('../site/js/wikipedia.js');
+  const summary = parseSummary({
+    title: 'Evil',
+    content_urls: { desktop: { page: 'javascript:alert(1)' } },
+    thumbnail: { source: 'javascript:alert(2)' },
+  });
+  assert.equal(summary.url, 'https://en.wikipedia.org/wiki/Evil');
+  assert.equal(summary.image, '');
+  assert.equal(summary.thumbnail, '');
+  const [article] = parseNearbyArticles({
+    query: { pages: [{ title: 'Evil Place', fullurl: 'data:text/html,hi', thumbnail: { source: 'http://x/y.jpg' }, coordinates: [{ lat: 1, lon: 2, dist: 3 }] }] },
+  });
+  assert.equal(article.url, 'https://en.wikipedia.org/wiki/Evil_Place');
+  assert.equal(article.thumbnail, '');
+});
+
+test('countByType counts heritage records per record type', async () => {
+  const { countByType } = await import('../site/js/records.js');
+  const r = (type) => ({ properties: { type } });
+  assert.deepEqual(countByType([r('monument'), r('building'), r('monument')]), { monument: 2, building: 1 });
+  assert.deepEqual(countByType([]), {});
+});

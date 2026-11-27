@@ -50,6 +50,7 @@ site/                 the website (this folder is what GitHub Pages publishes)
   js/wikidata.js      Wikidata queries: dated things nearby, nearest settlement
   js/placenames.js    townland and place-name meanings (read live from QUB)
   js/geo.js           distances (points and polygons)
+  js/format.js        small text helpers (HTML escaping, plurals)
   js/wikipedia.js     nearby Wikipedia articles and article summaries
   js/historical-maps.js  OSNI County Series layers (switched off)
   data/               generated heritage tiles and manifest
