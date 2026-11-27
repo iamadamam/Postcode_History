@@ -1,9 +1,8 @@
 // OSNI six-inch County Series (Historical Maps), served by the Department for
 // Communities' ArcGIS endpoints. The services are cached in Irish Grid, so we
 // ask each MapServer's `export` operation to reproject tiles to Web Mercator.
-// See docs/adr/0003-no-proxy-for-historical-maps.md.
-
-/* global L */
+// Switched off in config.js until OSNI allows this site: see
+// docs/adr/0003-no-proxy-for-historical-maps.md.
 
 const SERVER = 'https://utility.arcgis.com/usrsvcs/servers';
 
@@ -17,40 +16,16 @@ export const EDITIONS = [
 
 export const PRONI_VIEWER = 'https://www.nidirect.gov.uk/articles/about-proni-historical-maps-viewer';
 
-const ATTRIBUTION = 'Historical map © Crown copyright, <a href="https://www.spatialni.gov.uk/">OSNI</a> (OGL)';
-
-/** A Leaflet tile layer that fills each tile from an ArcGIS MapServer `export` request. */
-export function exportTileLayer(serviceUrl, options = {}) {
-  const ExportLayer = L.TileLayer.extend({
-    getTileUrl(coords) {
-      const size = this.getTileSize();
-      const nw = this._map.unproject(coords.scaleBy(size), coords.z);
-      const se = this._map.unproject(coords.add([1, 1]).scaleBy(size), coords.z);
-      const crs = this._map.options.crs;
-      const a = crs.project(nw);
-      const b = crs.project(se);
-      const scale = window.devicePixelRatio > 1 ? 2 : 1;
-      const params = new URLSearchParams({
-        bbox: [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)].join(','),
-        bboxSR: '3857',
-        imageSR: '3857',
-        size: `${size.x * scale},${size.y * scale}`,
-        dpi: String(96 * scale),
-        format: 'png32',
-        transparent: 'true',
-        f: 'image',
-      });
-      return `${serviceUrl}/export?${params}`;
-    },
-  });
-  return new ExportLayer('', { attribution: ATTRIBUTION, maxZoom: 19, ...options });
+/** MapLibre raster tile template that fills each tile from the MapServer's `export` operation. */
+export function exportTiles(serviceUrl) {
+  return `${serviceUrl}/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image`;
 }
 
 const availability = new Map();
 
 /**
  * Whether the service answers anonymous requests from this website.
- * The DfC endpoints may refuse requests from sites they haven't approved.
+ * The DfC endpoints refuse requests from sites they haven't approved.
  */
 export function isAvailable(serviceUrl, fetchImpl = fetch) {
   if (!availability.has(serviceUrl)) {

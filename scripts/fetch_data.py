@@ -154,9 +154,9 @@ PERIODS = {
 }
 
 
-def period_label(raw):
-    """'MED/L.MED; C17TH' -> 'Medieval / Late medieval, 17th century'."""
-    labels = []
+def _period_chunks(raw):
+    """'MED/L.MED; C17TH' -> [['Medieval', 'Late medieval'], ['17th century']]."""
+    chunks = []
     for chunk in re.split(r"[;,]", clean(raw)):
         chunk = chunk.strip()
         if not chunk or chunk.upper() == "UNCERTAIN":
@@ -165,17 +165,49 @@ def period_label(raw):
         for part in chunk.split("/"):
             part = part.strip()
             key = part.upper()
-            century = re.fullmatch(r"C(\d{1,2})TH", key)
+            century = re.fullmatch(r"C(\d{1,2})TH|(\d{1,2})TH CENTURY", key)
             if key in PERIODS:
                 parts.append(PERIODS[key])
             elif century:
-                parts.append(f"{century.group(1)}th century")
-            else:
+                parts.append(f"{century.group(1) or century.group(2)}th century")
+            elif part:
                 parts.append(sentence_case(part) if is_shouting(part) else part)
+        if parts:
+            chunks.append(parts)
+    return chunks
+
+
+def period_label(raw):
+    """'MED/L.MED; C17TH' -> 'Medieval / Late medieval, 17th century'."""
+    labels = []
+    for parts in _period_chunks(raw):
         label = " / ".join(parts)
         if label not in labels:
             labels.append(label)
     return ", ".join(labels)
+
+
+def eras(raw):
+    """Distinct single periods, for grouping on the timeline: ['Medieval', 'Late medieval', '17th century']."""
+    out = []
+    for parts in _period_chunks(raw):
+        for part in parts:
+            if part not in out:
+                out.append(part)
+    return out
+
+
+def built_range(raw):
+    """'1820 - 1839' -> [1820, 1839]; 'Pre 1600' -> [None, 1600]; otherwise None."""
+    text = clean(raw)
+    match = re.fullmatch(r"(\d{4})\s*-\s*(\d{4})", text)
+    if match:
+        start, end = int(match.group(1)), int(match.group(2))
+        return [start, end] if start <= end else None
+    match = re.fullmatch(r"(?i)pre\s*(\d{4})", text)
+    if match:
+        return [None, int(match.group(1))]
+    return None
 
 
 def address_parts(raw):
@@ -210,11 +242,15 @@ def monument(props):
     if approx:
         facts.append("Location approximate")
     title = sentence_case(props.get("Edited_Type")) or sentence_case(props.get("General_Type")) or "Monument"
-    return {
+    record = {
         "ref": clean(props.get("SMRNo")),
         "title": title,
         "facts": facts,
+        "eras": eras(props.get("General_Period")),
     }
+    if props.get("MONID"):
+        record["recordId"] = int(props["MONID"])  # site/js/records.js builds the DfC link
+    return record
 
 
 def building(props):
@@ -252,7 +288,13 @@ def building(props):
     townland = title_case(props.get("Townland"))
     if townland:
         facts.append(f"{townland} townland")
-    return {"ref": clean(props.get("HB_ref")), "title": title, "facts": facts}
+    record = {"ref": clean(props.get("HB_ref")), "title": title, "facts": facts}
+    built = built_range(props.get("Date_Const"))
+    if built:
+        record["built"] = built
+    if props.get("MainID"):
+        record["recordId"] = int(props["MainID"])  # site/js/records.js builds the DfC link
+    return record
 
 
 def industrial(props):

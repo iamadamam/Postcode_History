@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[{"type":"Feature","id":"monument:26568","geometry":{"type":"Point","coordinates":[-7.19546,54.33808]},"properties":{"type":"monument","ref":"FER214:018","title":"Mound: Doocarn","facts":["Mullynavale townland"]}}]}
+{"type":"FeatureCollection","features":[{"type":"Feature","id":"monument:26568","geometry":{"type":"Point","coordinates":[-7.19546,54.33808]},"properties":{"type":"monument","ref":"FER214:018","title":"Mound: Doocarn","facts":["Mullynavale townland"],"eras":[],"recordId":10423}}]}

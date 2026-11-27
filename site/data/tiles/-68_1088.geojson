@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[{"type":"Feature","id":"monument:35859","geometry":{"type":"Point","coordinates":[-5.43914,54.44786]},"properties":{"type":"monument","ref":"MRD188:011","title":"Fishtrap","facts":["Ratallagh townland"]}}]}
+{"type":"FeatureCollection","features":[{"type":"Feature","id":"monument:35859","geometry":{"type":"Point","coordinates":[-5.43914,54.44786]},"properties":{"type":"monument","ref":"MRD188:011","title":"Fishtrap","facts":["Ratallagh townland"],"eras":[]}}]}

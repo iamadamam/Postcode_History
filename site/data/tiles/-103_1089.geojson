@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[{"type":"Feature","id":"monument:25520","geometry":{"type":"Point","coordinates":[-8.16404,54.45942]},"properties":{"type":"monument","ref":"FER170:001","title":"Rath","facts":["Early Christian","Manger townland"]}}]}
+{"type":"FeatureCollection","features":[{"type":"Feature","id":"monument:25520","geometry":{"type":"Point","coordinates":[-8.16404,54.45942]},"properties":{"type":"monument","ref":"FER170:001","title":"Rath","facts":["Early Christian","Manger townland"],"eras":["Early Christian"],"recordId":9342}}]}

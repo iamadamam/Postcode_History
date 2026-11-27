@@ -20,7 +20,7 @@ export function nearbyArticlesUrl(centre, radius, limit) {
     exintro: '1',
     explaintext: '1',
     exsentences: '2',
-    exlimit: String(limit),
+    exlimit: String(Math.min(limit, 20)), // the API returns at most 20 extracts
     inprop: 'url',
   });
   return `${WIKIPEDIA_API}?${params}`;
@@ -46,11 +46,33 @@ export function parseNearbyArticles(body) {
     .sort((a, b) => a.distance - b.distance);
 }
 
-export async function nearbyArticles(centre, radius = 1000, limit = 10, fetchImpl = fetch) {
-  // Wikimedia asks browser clients to identify themselves with Api-User-Agent.
-  const response = await fetchImpl(nearbyArticlesUrl(centre, radius, limit), {
-    headers: { 'Api-User-Agent': 'NI-Postcode-History/1.0' },
-  });
+// Wikimedia asks browser clients to identify themselves with Api-User-Agent.
+const HEADERS = { headers: { 'Api-User-Agent': 'NI-Postcode-History/1.0' } };
+
+export async function nearbyArticles(centre, radius = 1000, limit = 30, fetchImpl = fetch) {
+  const response = await fetchImpl(nearbyArticlesUrl(centre, radius, limit), HEADERS);
   if (!response.ok) throw new Error(`Wikipedia ${response.status}`);
   return parseNearbyArticles(await response.json());
+}
+
+export const summaryUrl = (title) =>
+  `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+
+/** Turn a REST page summary into { title, description, extract, image, url }. */
+export function parseSummary(body) {
+  return {
+    title: body.titles?.normalized ?? body.title ?? '',
+    description: body.description ?? '',
+    extract: body.extract ?? '',
+    image: body.originalimage?.source ?? body.thumbnail?.source ?? '',
+    thumbnail: body.thumbnail?.source ?? '',
+    url: body.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent((body.title ?? '').replace(/ /g, '_'))}`,
+  };
+}
+
+/** A short summary of a Wikipedia article, for in-site previews and the Area Summary. */
+export async function articleSummary(title, fetchImpl = fetch) {
+  const response = await fetchImpl(summaryUrl(title), HEADERS);
+  if (!response.ok) throw new Error(`Wikipedia summary ${response.status}`);
+  return parseSummary(await response.json());
 }

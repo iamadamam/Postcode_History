@@ -4,27 +4,23 @@
 import { boundsAround, distanceToGeometry } from './geo.js';
 
 export const RECORD_TYPES = {
-  monument: {
-    label: 'Monument',
-    plural: 'Monuments',
-    colour: '#b45309',
-    lookup: {
-      text: 'Look it up in the Sites and Monuments Record',
-      url: 'https://www.communities-ni.gov.uk/services/sites-and-monuments-record',
-    },
-  },
-  building: {
-    label: 'Historic building',
-    plural: 'Historic buildings',
-    colour: '#1d4ed8',
-    lookup: {
-      text: 'Look it up in the Buildings Database',
-      url: 'https://www.communities-ni.gov.uk/services/buildings-database',
-    },
-  },
+  monument: { label: 'Monument', plural: 'Monuments', colour: '#c2410c' },
+  building: { label: 'Historic building', plural: 'Historic buildings', colour: '#2563eb' },
   industrial: { label: 'Industrial heritage', plural: 'Industrial heritage', colour: '#7c3aed' },
   park: { label: 'Historic park/garden', plural: 'Historic parks/gardens', colour: '#15803d' },
 };
+
+// Per-record pages, linked the same way as DfC's own Historic Environment Map Viewer.
+const RECORD_PAGES = {
+  monument: (id) => `https://apps.communities-ni.gov.uk/NISMR-public/Details.aspx?MonID=${id}`,
+  building: (id) => `https://apps.communities-ni.gov.uk/Buildings/buildview.aspx?id=${id}&js=false`,
+};
+
+/** The DfC page for a Heritage Record, or null when it has none (Industrial Heritage, Parks). */
+export function recordUrl(properties) {
+  const page = RECORD_PAGES[properties.type];
+  return page && Number.isInteger(properties.recordId) ? page(properties.recordId) : null;
+}
 
 /** Tile keys ("x_y") whose cells overlap the bounding box. */
 export function cellsForBounds(bounds, cellSize) {

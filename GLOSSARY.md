@@ -1,6 +1,6 @@
 # Postcode History
 
-A static website that takes a Northern Ireland **Postcode** and shows the history of the surrounding area: **Heritage Records** nearby, **Historical Maps**, and **Nearby Articles**.
+A static website that takes a Northern Ireland **Postcode** and shows the history of the surrounding area: an **Area Summary**, **Heritage Records** nearby, a **Timeline**, **Nearby Articles** and, when available, **Historical Maps**.
 
 ## Places
 
@@ -23,6 +23,18 @@ _Avoid_: Origin, location
 **Search Area**:
 Everything within 1 km of the **Search Centre**.
 _Avoid_: Radius, neighbourhood, nearby area
+
+**Townland**:
+The small, historic land division that the **Search Centre** lies in, such as Malone Lower. Northern Ireland has about 9,600 of them.
+_Avoid_: Area, neighbourhood, district
+
+**Place Name**:
+A named place (a **Townland**, settlement, street or landmark) with its Irish or other original form and meaning, as recorded by the Northern Ireland Place-Name Project.
+_Avoid_: Placename, toponym, etymology
+
+**Area Summary**:
+The overview of a **Search Area**: the nearest settlement's Wikipedia introduction, the **Townland** and its **Place Name**, other **Place Names** nearby, and counts of what the other sections hold.
+_Avoid_: Overview (as a noun for the content; "Overview" is only the tab's label), profile
 
 ## Heritage
 
@@ -49,6 +61,20 @@ _Avoid_: IHR, industrial site
 **Historic Park/Garden**:
 A **Heritage Record** from the register of Historic Parks, Gardens and Demesnes. Unlike the other **Record Types**, it covers an area, not a point.
 _Avoid_: Demesne (on its own), park
+
+**Era**:
+A named period that a **Monument** belongs to (Neolithic, Early Christian, 17th century…), or the date range a **Historic Building** was built in. Used to group **Heritage Records** on the **Timeline**.
+_Avoid_: Age, epoch, date (for a period)
+
+## Timeline
+
+**Timeline**:
+Everything dated near the **Search Centre**, oldest first: **Timeline Events** and **Heritage Records** grouped by **Era**.
+_Avoid_: History (as a section name), news
+
+**Timeline Event**:
+A dated place or happening near the **Search Centre** from Wikidata: when something was founded, opened or closed, or when an event (a battle, a bombing, an opening) took place.
+_Avoid_: News, news event, story
 
 ## Maps and articles
 
